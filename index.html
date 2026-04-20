@@ -366,7 +366,7 @@ function drawTree(node) {
   
   drawNodeCrown(node.x, node.y, node.radius);
   ctx.beginPath(); ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-  ctx.fillStyle = node.color === 'red' ? '#e53935' : '#1a1a1a'; ctx.fill();
+  ctx.fillStyle = node.color === 'red'  '#e53935' : '#1a1a1a'; ctx.fill();
   ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke();
 
   if (node.img && node.img.complete) {
@@ -522,7 +522,7 @@ canvas.addEventListener('mousemove', (e) => {
   if (!showTreeInfo) { canvas.style.cursor = 'default'; return; }
   const rect = canvas.getBoundingClientRect();
   const hoveredNode = findClickedNode(root, e.clientX - rect.left, e.clientY - rect.top);
-  canvas.style.cursor = hoveredNode ? 'pointer' : 'default';
+  canvas.style.cursor = hoveredNode  'pointer' : 'default';
 });
 
 // --- BUTTON LISTENERS ---
@@ -533,8 +533,8 @@ document.getElementById('inspectBtn').addEventListener('click', () => {
 });
 
 document.getElementById('shareBtn').addEventListener('click', () => {
-  const baseUrl = window.location.href.split('?')[0];
-  const shareUrl = `${baseUrl}?tree=${caughtSequence.join(',')}`;
+  const baseUrl = window.location.href.split('')[0];
+  const shareUrl = `${baseUrl}/viewer.html?tree=${caughtSequence.join(',')}`;
 
   const showCopiedToast = () => {
     const btn = document.getElementById('shareBtn');
