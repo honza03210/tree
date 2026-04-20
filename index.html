@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Pokémon RB Tree Forest</title>
   <style>
     body { 
@@ -10,6 +10,7 @@
       overflow: hidden; 
       background: #4fc3f7; 
       font-family: Arial, sans-serif;
+      touch-action: none; /* Prevents pull-to-refresh on mobile */
     }
     canvas { 
       display: block; 
@@ -18,9 +19,8 @@
 
     /* --- START SCREEN --- */
     #startOverlay {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100vw; height: 100vh;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
       background: #4fc3f7;
       display: flex; justify-content: center; align-items: center;
       z-index: 100;
@@ -55,9 +55,8 @@
     /* --- UI STYLES --- */
     #gameOverOverlay {
       display: none; 
-      position: absolute; 
-      top: 0; left: 0; 
-      width: 100vw; height: 100vh;
+      position: fixed; 
+      top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0,0,0,0.85); 
       color: white; 
       flex-direction: column; 
@@ -92,17 +91,17 @@
 
     #inspectUI {
       display: none;
-      position: absolute;
+      position: fixed;
       top: 20px;
       left: 20px;
       z-index: 20;
     }
-    #closeBtn { background: #e53935; color: white; }
+    #closeBtn { background: #e53935; color: white; padding: 8px 16px; font-size: 16px;}
 
     /* --- POKEMON CARD MODAL --- */
     #cardModal {
-      display: none; position: absolute; top: 0; left: 0;
-      width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.85);
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
       z-index: 30; justify-content: center; align-items: center;
       backdrop-filter: blur(5px);
     }
@@ -166,13 +165,27 @@
       border: 3px solid white; border-radius: 50%; width: 40px; height: 40px;
       font-size: 18px; padding: 0; box-shadow: 0 4px 8px rgba(0,0,0,0.3); z-index: 2;
     }
+
+    /* --- MOBILE RESPONSIVE TWEAKS --- */
+    @media (max-width: 600px) {
+      .start-card h1 { font-size: 24px; margin-bottom: 10px; }
+      .start-card p { font-size: 14px; }
+      #startBtn { font-size: 18px; padding: 12px 24px; }
+      #gameOverOverlay h1 { font-size: 32px !important; }
+      button { font-size: 15px; padding: 10px 18px; }
+      .btn-group { gap: 10px; }
+      .poke-card { width: 85vw; padding: 15px; border-width: 6px;}
+      .poke-card h2 { font-size: 22px; }
+      .poke-card img { width: 120px; height: 120px; }
+      .stats p { font-size: 14px; margin: 5px 0; }
+    }
   </style>
 </head>
 <body>
 
 <div id="startOverlay">
   <div class="start-card">
-    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/906.png" style="width: 120px;" alt="Sprigatito">
+    <img src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/906.png" style="width: 100px; max-width: 30vw;" alt="Sprigatito">
     <h1>Pokémon RB Tree</h1>
     <p>Catch Pokémon to grow your tree!<br>Use <b>Arrow Keys</b> or <b>Tilt your Phone</b> to move.</p>
     <button id="startBtn">START GAME</button>
@@ -233,10 +246,14 @@ const ctx = canvas.getContext('2d');
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
+// --- RESPONSIVE SCALING ---
+// If the screen is narrow (like a phone), we reduce the size of the canvas elements
+const SCALE = window.innerWidth < 600 ? 0.6 : 1; 
+
 // --- TREE CONSTANTS ---
 const MAX_LEVEL = 4;
-const LEVEL_SPACING = 120; 
-const TOP_MARGIN = 60;
+const LEVEL_SPACING = Math.floor(120 * SCALE); 
+const TOP_MARGIN = Math.floor(60 * Math.max(0.7, SCALE)); // Don't shrink top margin too much
 
 function computeRootY() { return (MAX_LEVEL * LEVEL_SPACING) + TOP_MARGIN; }
 let TREE_CENTER_Y = computeRootY();
@@ -245,7 +262,15 @@ let TREE_CENTER_Y = computeRootY();
 const playerImg = new Image();
 playerImg.src = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/906.png';
 
-let player = { x: canvas.width/2, y: canvas.height-180, width:160, height:160, speed:7, facingRight: false };
+let player = { 
+  x: canvas.width/2, 
+  y: canvas.height - (180 * SCALE), 
+  width: 160 * SCALE, 
+  height: 160 * SCALE, 
+  speed: 7 * Math.max(0.8, SCALE), 
+  facingRight: false 
+};
+
 let objects = [];
 let score = 0;
 let gameOver = false;
@@ -261,16 +286,16 @@ function initEnvironment() {
   environment.grass = [];
   const cloudCount = Math.floor(Math.random() * 3) + 3;
   for (let i = 0; i < cloudCount; i++) {
-    const scale = Math.random() * 0.5 + 0.5;
+    const scale = (Math.random() * 0.5 + 0.5) * SCALE;
     environment.clouds.push({
       x: Math.random() * canvas.width, y: Math.random() * (canvas.height * 0.3), 
       speed: Math.random() * 0.3 + 0.1, scale, width: 150 * scale, height: 80 * scale
     });
   }
-  const bladeWidth = 15; const overlap = 5; 
+  const bladeWidth = 15 * SCALE; const overlap = 5 * SCALE; 
   const numBlades = Math.ceil(canvas.width / (bladeWidth - overlap)) + 5;
   for (let i = 0; i < numBlades; i++) {
-    environment.grass.push({ x: i * (bladeWidth - overlap), width: bladeWidth, height: 25 + Math.random() * 35 });
+    environment.grass.push({ x: i * (bladeWidth - overlap), width: bladeWidth, height: (25 + Math.random() * 35) * SCALE });
   }
 }
 initEnvironment(); 
@@ -282,7 +307,8 @@ class Node {
     this.name = pokeData.name; this.stats = pokeData.stats;
     this.left = null; this.right = null; this.parent = null; this.color = 'red';
     this.x = 0; this.y = 0; this.tx = 0; this.ty = 0;
-    this.radius = 18 + Math.min(40, pokeData.pokeSize * 2);
+    // Scale down the nodes
+    this.radius = Math.floor((18 + Math.min(40, pokeData.pokeSize * 2)) * Math.max(0.7, SCALE));
   }
 }
 
@@ -372,11 +398,13 @@ function drawTreeAesthetics() {
   const currentDepth = getCurrentDepth(root);
   const depthFactor = Math.min(1, currentDepth / MAX_LEVEL);
   const maxWidth = canvas.width * (0.5 + (depthFactor * 0.8)); 
-  const treeHeight = 1.5 * ((currentDepth * LEVEL_SPACING) + 100);
+  const treeHeight = 1.5 * ((currentDepth * LEVEL_SPACING) + (100 * SCALE));
   const crownCenterY = root.y - (treeHeight / 2) + 20;
 
-  const trunkWidth = 50; const trunkHeight = canvas.height - root.y;
-  const trunkGrad = ctx.createLinearGradient(canvas.width/2 - 25, 0, canvas.width/2 + 25, 0);
+  const trunkWidth = 50 * SCALE; 
+  const trunkHeight = canvas.height - root.y; 
+  
+  const trunkGrad = ctx.createLinearGradient(canvas.width/2 - trunkWidth/2, 0, canvas.width/2 + trunkWidth/2, 0);
   trunkGrad.addColorStop(0, '#3e2723'); trunkGrad.addColorStop(1, '#5d4037');
   
   ctx.fillStyle = trunkGrad; ctx.beginPath();
@@ -390,7 +418,7 @@ function drawTreeAesthetics() {
 function drawNodeCrown(x, y, radius) {
   ctx.fillStyle = 'rgba(46, 125, 50, 0.8)';
   for (let i = 0; i < 5; i++) {
-    const angle = (i / 5) * Math.PI * 2; const ox = Math.cos(angle) * 15; const oy = Math.sin(angle) * 10;
+    const angle = (i / 5) * Math.PI * 2; const ox = Math.cos(angle) * (15 * SCALE); const oy = Math.sin(angle) * (10 * SCALE);
     ctx.beginPath(); ctx.ellipse(x + ox, y + oy, radius * 1.2, radius * 0.9, angle, 0, Math.PI * 2); ctx.fill();
   }
 }
@@ -400,7 +428,7 @@ function drawTree(node) {
   if (node.parent) {
     ctx.strokeStyle = '#3e2723'; 
     const branchLength = Math.hypot(node.x - node.parent.x, node.y - node.parent.y);
-    ctx.lineWidth = Math.max(2, branchLength * 0.035); 
+    ctx.lineWidth = Math.max(1, branchLength * 0.035); 
     
     ctx.beginPath(); 
     ctx.moveTo(node.x, node.y); 
@@ -420,13 +448,13 @@ function drawTree(node) {
     const imgSize = node.radius * 1.6; ctx.drawImage(node.img, node.x - imgSize/2, node.y - imgSize/2, imgSize, imgSize);
   }
   if (showTreeInfo && node.name) {
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
     const displayName = node.name.charAt(0).toUpperCase() + node.name.slice(1);
     const nameY = node.y + node.radius + 6;
-    ctx.font = 'bold 13px Arial'; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.fillStyle = 'white';             
+    ctx.font = `bold ${Math.max(10, 13 * SCALE)}px Arial`; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.fillStyle = 'white';             
     ctx.strokeText(displayName, node.x, nameY); ctx.fillText(displayName, node.x, nameY);
-    const statsText = `HP:${node.stats.hp} A:${node.stats.atk} D:${node.stats.def}`; const statsY = nameY + 16;
-    ctx.font = '11px Arial'; ctx.strokeText(statsText, node.x, statsY); ctx.fillStyle = '#ffeb3b'; ctx.fillText(statsText, node.x, statsY);
+    const statsText = `HP:${node.stats.hp} A:${node.stats.atk} D:${node.stats.def}`; const statsY = nameY + (14 * SCALE);
+    ctx.font = `${Math.max(9, 11 * SCALE)}px Arial`; ctx.strokeText(statsText, node.x, statsY); ctx.fillStyle = '#ffeb3b'; ctx.fillText(statsText, node.x, statsY);
   }
 }
 
@@ -438,7 +466,11 @@ async function spawnObject() {
     const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`); const data = await res.json();
     const speciesRes = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`); const speciesData = await speciesRes.json();
     const img = new Image(); img.src = data.sprites.front_default;
-    const rarity = data.base_experience || 50; const size = 40 + (rarity/300)*80;
+    const rarity = data.base_experience || 50; 
+    
+    // Scale down falling objects
+    const baseSize = 40 + (rarity/300)*80;
+    const size = Math.floor(baseSize * SCALE);
 
     let description = "Description unavailable.";
     const flavorEntry = speciesData.flavor_text_entries.find(e => e.language.name === 'en');
@@ -449,7 +481,7 @@ async function spawnObject() {
       pokeSize: data.height, height: data.height / 10, weight: data.weight / 10,
       types: data.types.map(t => t.type.name), abilities: data.abilities.map(a => a.ability.name), description: description
     };
-    objects.push({ x: Math.random()*(canvas.width-size), y: 0, size, speed: 2+Math.random()*3, img, id, pokeData });
+    objects.push({ x: Math.random()*(canvas.width-size), y: -size, size, speed: 2+Math.random()*3, img, id, pokeData });
   } catch (e) { console.error(e); }
 }
 
@@ -460,7 +492,7 @@ document.addEventListener('keyup', e => keys[e.key]=false);
 
 function update() {
   if (tiltX) {
-    player.x += tiltX*0.5;
+    player.x += tiltX * (0.5 * Math.max(0.7, SCALE)); // Adjust tilt sensitivity slightly
     if (tiltX > 5) player.facingRight = true;
     if (tiltX < -5) player.facingRight = false;
   }
@@ -482,7 +514,8 @@ function update() {
   objects.forEach((obj, i) => {
     obj.y += obj.speed;
     const dx = (obj.x+obj.size/2) - (player.x+player.width/2); const dy = (obj.y+obj.size/2) - (player.y+player.height/2);
-    const r = player.width/2 + obj.size/2;
+    // Add a bit of leniency to collision on mobile so it's not too frustrating
+    const r = (player.width/2 * 0.8) + (obj.size/2 * 0.8);
 
     if (dx*dx + dy*dy < r*r) {
       objects.splice(i,1);
@@ -513,15 +546,16 @@ function draw() {
 
   objects.forEach(o => { if (o.img.complete) ctx.drawImage(o.img, o.x, o.y, o.size, o.size); });
 
-  ctx.fillStyle = '#2e7d32'; const groundHeight = 30; const groundY = canvas.height - groundHeight;
+  ctx.fillStyle = '#2e7d32'; const groundHeight = 30 * SCALE; const groundY = canvas.height - groundHeight;
   ctx.fillRect(0, groundY, canvas.width, groundHeight);
   environment.grass.forEach(g => {
     ctx.beginPath(); ctx.moveTo(g.x, groundY); ctx.lineTo(g.x + g.width, groundY);
     ctx.lineTo(g.x + g.width / 2, groundY - g.height); ctx.closePath(); ctx.fill();
   });
 
-  ctx.fillStyle='white'; ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.font='24px Arial';
-  ctx.shadowColor = 'black'; ctx.shadowBlur = 4; ctx.fillText('Score: '+score, 20, 40); ctx.shadowBlur = 0; 
+  ctx.fillStyle='white'; ctx.textAlign='left'; ctx.textBaseline='top'; 
+  ctx.font=`${Math.max(16, 24 * SCALE)}px Arial`;
+  ctx.shadowColor = 'black'; ctx.shadowBlur = 4; ctx.fillText('Score: '+score, 20, 20); ctx.shadowBlur = 0; 
 
   if (gameOver && !gameOverHandled) {
     gameOverHandled = true; document.getElementById('gameOverOverlay').style.display = 'flex';
@@ -536,9 +570,11 @@ function loop(){
 } 
 
 window.addEventListener('resize', ()=>{
+  // Update screen sizes but don't reset the scale multiplier dynamically during gameplay 
+  // to avoid weird shifting if the mobile browser bar hides/shows
   canvas.width = window.innerWidth; canvas.height = window.innerHeight;
   TREE_CENTER_Y = computeRootY(); root.x = canvas.width/2; root.y = TREE_CENTER_Y;
-  player.y = canvas.height - 180; initEnvironment();
+  player.y = canvas.height - (180 * SCALE); initEnvironment();
 });
 
 // --- PERMISSION & START LOGIC ---
@@ -547,7 +583,6 @@ const startBtn = document.getElementById('startBtn');
 let gameStarted = false;
 
 startBtn.addEventListener('click', async () => {
-  // 1. Request Tilt Permissions for iOS/Modern Android
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
     try {
       const permission = await DeviceOrientationEvent.requestPermission();
@@ -558,15 +593,12 @@ startBtn.addEventListener('click', async () => {
       console.error("Orientation permission denied or failed:", err);
     }
   } else {
-    // Non-iOS or older devices
     window.addEventListener('deviceorientation', e => tiltX = e.gamma);
   }
 
-  // 2. Start the game
   startOverlay.style.display = 'none';
   gameStarted = true;
   
-  // Start spawning only after button click
   setInterval(spawnObject, 1000);
   loop(); 
 });
@@ -595,12 +627,17 @@ function showPokemonCard(node) {
   document.getElementById('cardModal').style.display = 'flex';
 }
 
-canvas.addEventListener('click', (e) => {
+// Touch support for info clicking
+function handleInteraction(e) {
   if (!showTreeInfo) return; 
   const rect = canvas.getBoundingClientRect();
-  const clickedNode = findClickedNode(root, e.clientX - rect.left, e.clientY - rect.top);
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const clickedNode = findClickedNode(root, clientX - rect.left, clientY - rect.top);
   if (clickedNode) showPokemonCard(clickedNode);
-});
+}
+canvas.addEventListener('click', handleInteraction);
+canvas.addEventListener('touchstart', handleInteraction);
 
 canvas.addEventListener('mousemove', (e) => {
   if (!showTreeInfo) { canvas.style.cursor = 'default'; return; }
@@ -623,7 +660,7 @@ document.getElementById('shareBtn').addEventListener('click', () => {
   const showCopiedToast = () => {
     const btn = document.getElementById('shareBtn');
     const originalText = btn.innerText;
-    btn.innerText = "✅ Copied to Clipboard!";
+    btn.innerText = "✅ Copied!";
     btn.style.background = "#4caf50";
     setTimeout(() => {
       btn.innerText = originalText;
@@ -633,21 +670,15 @@ document.getElementById('shareBtn').addEventListener('click', () => {
 
   if (navigator.clipboard && window.isSecureContext) {
     navigator.clipboard.writeText(shareUrl).then(showCopiedToast).catch(err => {
-      prompt("Copy this link to share your tree:", shareUrl);
+      prompt("Copy this link:", shareUrl);
     });
   } else {
     const textArea = document.createElement("textarea");
     textArea.value = shareUrl;
-    textArea.style.position = "fixed";
-    textArea.style.top = "-9999px"; 
-    document.body.appendChild(textArea);
-    textArea.focus(); textArea.select();
-    try {
-      document.execCommand('copy');
-      showCopiedToast();
-    } catch (err) {
-      prompt("Copy this link to share your tree:", shareUrl);
-    }
+    textArea.style.position = "fixed"; textArea.style.top = "-9999px"; 
+    document.body.appendChild(textArea); textArea.focus(); textArea.select();
+    try { document.execCommand('copy'); showCopiedToast(); } 
+    catch (err) { prompt("Copy this link:", shareUrl); }
     document.body.removeChild(textArea);
   }
 });
