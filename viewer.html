@@ -1,7 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <meta name="title" content="Sprigajoito">
+  <meta name="description" content="Catch Pokémon, feed them to your tree, and watch it grow to the sky!">
+  <meta name="theme-color" content="#4fc3f7"> <meta property="og:type" content="website">
+  <meta property="og:url" content="https://en.joy.cz/">
+  <meta property="og:title" content="Sprigajoito">
+  <meta property="og:description" content="Catch Pokémon, feed them to your tree, and watch it grow to the sky!">
+  <meta property="og:image" content="https://en.joy.cz/banner.png">
+
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="https://en.joy.cz/">
+  <meta property="twitter:title" content="Sprigajoito">
+  <meta property="twitter:description" content="Catch Pokémon, feed them to your tree, and watch it grow to the sky!">
+  <meta property="twitter:image" content="https://en.joy.cz/banner.png">
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Shared Pokémon Forest</title>
   <style>
     body { 
@@ -9,10 +23,16 @@
       overflow: hidden; 
       background: #4fc3f7; 
       font-family: Arial, sans-serif;
+      touch-action: none; /* Prevents pull-to-refresh on mobile */
     }
     canvas { 
       display: block; 
       margin: auto; 
+      /* Keep pixel art crisp when scaling up */
+      image-rendering: -moz-crisp-edges;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+      image-rendering: pixelated;
     }
 
     /* --- UI STYLES --- */
@@ -43,8 +63,8 @@
 
     /* --- POKEMON CARD MODAL --- */
     #cardModal {
-      display: none; position: absolute; top: 0; left: 0;
-      width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.85);
+      display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.85);
       z-index: 50; justify-content: center; align-items: center;
       backdrop-filter: blur(5px);
     }
@@ -108,6 +128,14 @@
       border: 3px solid white; border-radius: 50%; width: 40px; height: 40px;
       font-size: 18px; padding: 0; box-shadow: 0 4px 8px rgba(0,0,0,0.3); z-index: 2; cursor: pointer;
     }
+    
+    /* --- MOBILE RESPONSIVE TWEAKS --- */
+    @media (max-width: 600px) {
+      .poke-card { width: 85vw; padding: 15px; border-width: 6px;}
+      .poke-card h2 { font-size: 22px; }
+      .poke-card img { width: 120px; height: 120px; }
+      .stats p { font-size: 14px; margin: 5px 0; }
+    }
   </style>
 </head>
 <body>
@@ -153,17 +181,39 @@ const TYPE_COLORS = {
 
 const canvas = document.getElementById('viewerCanvas');
 const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+
+// --- HIGH DPI CANVAS SCALING ---
+let GAME_WIDTH = window.innerWidth;
+let GAME_HEIGHT = window.innerHeight;
+
+function resizeCanvas() {
+  GAME_WIDTH = window.innerWidth;
+  GAME_HEIGHT = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+  
+  canvas.width = GAME_WIDTH * dpr;
+  canvas.height = GAME_HEIGHT * dpr;
+  canvas.style.width = GAME_WIDTH + 'px';
+  canvas.style.height = GAME_HEIGHT + 'px';
+  
+  // Reset transforms before applying scale to prevent infinite multiplying
+  ctx.setTransform(1, 0, 0, 1, 0, 0); 
+  ctx.scale(dpr, dpr);
+  ctx.imageSmoothingEnabled = false; 
+}
+resizeCanvas();
+
+// --- RESPONSIVE SCALING ---
+const SCALE = GAME_WIDTH < 600 ? 0.6 : 1; 
 
 // --- TREE CONSTANTS ---
-const LEVEL_SPACING = 120; 
-const TOP_MARGIN = 60;
+const LEVEL_SPACING = Math.floor(120 * SCALE); 
+const TOP_MARGIN = Math.floor(60 * Math.max(0.7, SCALE)); 
 
 function computeRootY(currentDepth) { 
   return (currentDepth * LEVEL_SPACING) + TOP_MARGIN; 
 }
-let TREE_CENTER_Y = 180;
+let TREE_CENTER_Y = computeRootY(0);
 
 // --- ENVIRONMENT STATE ---
 let environment = { clouds: [], grass: [] };
@@ -172,16 +222,16 @@ function initEnvironment() {
   environment.grass = [];
   const cloudCount = Math.floor(Math.random() * 3) + 3;
   for (let i = 0; i < cloudCount; i++) {
-    const scale = Math.random() * 0.5 + 0.5;
+    const scale = (Math.random() * 0.5 + 0.5) * SCALE;
     environment.clouds.push({
-      x: Math.random() * canvas.width, y: Math.random() * (canvas.height * 0.3), 
+      x: Math.random() * GAME_WIDTH, y: Math.random() * (GAME_HEIGHT * 0.3), 
       speed: Math.random() * 0.3 + 0.1, scale, width: 150 * scale, height: 80 * scale
     });
   }
-  const bladeWidth = 15; const overlap = 5; 
-  const numBlades = Math.ceil(canvas.width / (bladeWidth - overlap)) + 5;
+  const bladeWidth = 15 * SCALE; const overlap = 5 * SCALE; 
+  const numBlades = Math.ceil(GAME_WIDTH / (bladeWidth - overlap)) + 5;
   for (let i = 0; i < numBlades; i++) {
-    environment.grass.push({ x: i * (bladeWidth - overlap), width: bladeWidth, height: 25 + Math.random() * 35 });
+    environment.grass.push({ x: i * (bladeWidth - overlap), width: bladeWidth, height: (25 + Math.random() * 35) * SCALE });
   }
 }
 initEnvironment(); 
@@ -194,9 +244,9 @@ class Node {
     this.left = null; this.right = null; this.parent = null; this.color = 'red';
     
     // Nodes spawn from the bottom center for the growing animation
-    this.x = canvas.width / 2; this.y = canvas.height; 
+    this.x = GAME_WIDTH / 2; this.y = GAME_HEIGHT; 
     this.tx = 0; this.ty = 0;
-    this.radius = 18 + Math.min(40, pokeData.pokeSize * 2);
+    this.radius = Math.floor((18 + Math.min(40, pokeData.pokeSize * 2)) * Math.max(0.7, SCALE));
   }
 }
 
@@ -250,7 +300,7 @@ function getCurrentDepth(node) {
 }
 
 // --- TREE LAYOUT & ANIMATION ---
-function layoutTree(node, depth=0, xMin=0, xMax=canvas.width) {
+function layoutTree(node, depth=0, xMin=0, xMax=GAME_WIDTH) {
   if (!node) return;
   node.tx = (xMin + xMax)/2; node.ty = TREE_CENTER_Y - depth * LEVEL_SPACING;
   layoutTree(node.left, depth+1, xMin, node.tx); layoutTree(node.right, depth+1, node.tx, xMax);
@@ -276,26 +326,28 @@ function drawTreeAesthetics() {
   if (!root) return;
   const currentDepth = getCurrentDepth(root);
   const depthFactor = Math.min(1, currentDepth / 4);
-  const maxWidth = canvas.width * (0.5 + (depthFactor * 0.8)); 
-  const treeHeight = 1.5 * ((currentDepth * LEVEL_SPACING) + 100);
+  const maxWidth = GAME_WIDTH * (0.5 + (depthFactor * 0.8)); 
+  const treeHeight = 1.5 * ((currentDepth * LEVEL_SPACING) + (100 * SCALE));
   const crownCenterY = root.y - (treeHeight / 2) + 20;
 
-  const trunkWidth = 50 + (currentDepth * 5); const trunkHeight = canvas.height; 
-  const trunkGrad = ctx.createLinearGradient(canvas.width/2 - 25, 0, canvas.width/2 + 25, 0);
+  const trunkWidth = (50 + (currentDepth * 5)) * SCALE; 
+  const trunkHeight = GAME_HEIGHT - root.y; 
+  
+  const trunkGrad = ctx.createLinearGradient(GAME_WIDTH/2 - trunkWidth/2, 0, GAME_WIDTH/2 + trunkWidth/2, 0);
   trunkGrad.addColorStop(0, '#3e2723'); trunkGrad.addColorStop(1, '#5d4037');
   
   ctx.fillStyle = trunkGrad; ctx.beginPath();
-  ctx.moveTo(canvas.width/2 - trunkWidth/2, root.y); ctx.lineTo(canvas.width/2 + trunkWidth/2, root.y);
-  ctx.lineTo(canvas.width/2 + trunkWidth/4, root.y + trunkHeight); ctx.lineTo(canvas.width/2 - trunkWidth/4, root.y + trunkHeight); ctx.fill();
+  ctx.moveTo(GAME_WIDTH/2 - trunkWidth/2, root.y); ctx.lineTo(GAME_WIDTH/2 + trunkWidth/2, root.y);
+  ctx.lineTo(GAME_WIDTH/2 + trunkWidth/4, root.y + trunkHeight); ctx.lineTo(GAME_WIDTH/2 - trunkWidth/4, root.y + trunkHeight); ctx.fill();
 
-  const grad = ctx.createRadialGradient(canvas.width/2, crownCenterY, 0, canvas.width/2, crownCenterY, treeHeight);
+  const grad = ctx.createRadialGradient(GAME_WIDTH/2, crownCenterY, 0, GAME_WIDTH/2, crownCenterY, treeHeight);
   grad.addColorStop(0.8, 'rgba(20, 60, 20, 0.4)'); grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.beginPath(); ctx.ellipse(canvas.width / 2, crownCenterY, maxWidth / 2, treeHeight / 1.4, 0, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(GAME_WIDTH / 2, crownCenterY, maxWidth / 2, treeHeight / 1.4, 0, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
 }
 function drawNodeCrown(x, y, radius) {
   ctx.fillStyle = 'rgba(46, 125, 50, 0.8)';
   for (let i = 0; i < 5; i++) {
-    const angle = (i / 5) * Math.PI * 2; const ox = Math.cos(angle) * 15; const oy = Math.sin(angle) * 10;
+    const angle = (i / 5) * Math.PI * 2; const ox = Math.cos(angle) * (15 * SCALE); const oy = Math.sin(angle) * (10 * SCALE);
     ctx.beginPath(); ctx.ellipse(x + ox, y + oy, radius * 1.2, radius * 0.9, angle, 0, Math.PI * 2); ctx.fill();
   }
 }
@@ -325,10 +377,14 @@ function drawTree(node) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
     const displayName = node.name.charAt(0).toUpperCase() + node.name.slice(1);
     const nameY = node.y + node.radius + 6;
-    ctx.font = 'bold 13px Arial'; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.fillStyle = 'white';             
+    
+    ctx.font = `bold ${Math.max(10, 13 * SCALE)}px Arial`; 
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.fillStyle = 'white';             
     ctx.strokeText(displayName, node.x, nameY); ctx.fillText(displayName, node.x, nameY);
-    const statsText = `HP:${node.stats.hp} A:${node.stats.atk} D:${node.stats.def}`; const statsY = nameY + 16;
-    ctx.font = '11px Arial'; ctx.strokeText(statsText, node.x, statsY); ctx.fillStyle = '#ffeb3b'; ctx.fillText(statsText, node.x, statsY);
+    
+    const statsText = `HP:${node.stats.hp} A:${node.stats.atk} D:${node.stats.def}`; const statsY = nameY + (14 * SCALE);
+    ctx.font = `${Math.max(9, 11 * SCALE)}px Arial`; 
+    ctx.strokeText(statsText, node.x, statsY); ctx.fillStyle = '#ffeb3b'; ctx.fillText(statsText, node.x, statsY);
   }
 }
 
@@ -414,35 +470,39 @@ async function initializeSharedTree() {
 // --- RENDER LOOP ---
 function update() {
   environment.clouds.forEach(c => {
-    c.x += c.speed; if (c.x > canvas.width + c.width) { c.x = -c.width; c.y = Math.random() * (canvas.height * 0.3); }
+    c.x += c.speed; if (c.x > GAME_WIDTH + c.width) { c.x = -c.width; c.y = Math.random() * (GAME_HEIGHT * 0.3); }
   });
-  layoutTree(root, 0, 0, canvas.width); 
+  layoutTree(root, 0, 0, GAME_WIDTH); 
   animateTree(root);
 }
 
 function draw() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
   drawEnvironment(); 
   drawTreeAesthetics(); 
   drawTree(root);
 
   // Draw Ground
-  ctx.fillStyle = '#2e7d32'; const groundHeight = 30; const groundY = canvas.height - groundHeight;
-  ctx.fillRect(0, groundY, canvas.width, groundHeight);
+  ctx.fillStyle = '#2e7d32'; const groundHeight = 30 * SCALE; const groundY = GAME_HEIGHT - groundHeight;
+  ctx.fillRect(0, groundY, GAME_WIDTH, groundHeight);
   environment.grass.forEach(g => {
     ctx.beginPath(); ctx.moveTo(g.x, groundY); ctx.lineTo(g.x + g.width, groundY);
     ctx.lineTo(g.x + g.width / 2, groundY - g.height); ctx.closePath(); ctx.fill();
   });
   
-  // Title
-  ctx.fillStyle='white'; ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.font='bold 24px Arial';
-  ctx.shadowColor = 'black'; ctx.shadowBlur = 4; ctx.fillText('Shared Pokémon Forest', 20, 40); ctx.shadowBlur = 0; 
+  // Title text with high-performance hard shadow
+  ctx.textAlign='left'; ctx.textBaseline='top'; 
+  ctx.font=`bold ${Math.max(16, 24 * SCALE)}px Arial`;
+  ctx.fillStyle='black'; 
+  ctx.fillText('Shared Pokémon Forest', 22, 22);
+  ctx.fillStyle='white'; 
+  ctx.fillText('Shared Pokémon Forest', 20, 20); 
 }
 
 function loop(){ update(); draw(); requestAnimationFrame(loop);} 
 
 window.addEventListener('resize', ()=>{
-  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  resizeCanvas(); // Use the newly scaled resize function
   if(root) TREE_CENTER_Y = computeRootY(getCurrentDepth(root));
   initEnvironment();
 });
@@ -470,11 +530,16 @@ function showPokemonCard(node) {
   document.getElementById('cardModal').style.display = 'flex';
 }
 
-canvas.addEventListener('click', (e) => {
+function handleInteraction(e) {
   const rect = canvas.getBoundingClientRect();
-  const clickedNode = findClickedNode(root, e.clientX - rect.left, e.clientY - rect.top);
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const clickedNode = findClickedNode(root, clientX - rect.left, clientY - rect.top);
   if (clickedNode) showPokemonCard(clickedNode);
-});
+}
+
+canvas.addEventListener('click', handleInteraction);
+canvas.addEventListener('touchstart', handleInteraction);
 
 canvas.addEventListener('mousemove', (e) => {
   const rect = canvas.getBoundingClientRect();
