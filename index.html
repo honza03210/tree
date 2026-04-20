@@ -375,7 +375,7 @@ function drawTreeAesthetics() {
   const treeHeight = 1.5 * ((currentDepth * LEVEL_SPACING) + 100);
   const crownCenterY = root.y - (treeHeight / 2) + 20;
 
-  const trunkWidth = 50; const trunkHeight = 450; 
+  const trunkWidth = 50; const trunkHeight = canvas.height - root.y;
   const trunkGrad = ctx.createLinearGradient(canvas.width/2 - 25, 0, canvas.width/2 + 25, 0);
   trunkGrad.addColorStop(0, '#3e2723'); trunkGrad.addColorStop(1, '#5d4037');
   
