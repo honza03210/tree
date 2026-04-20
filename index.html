@@ -14,7 +14,12 @@
     }
     canvas { 
       display: block; 
-      margin: auto; 
+      margin: auto;
+      /* Keep pixel art crisp when scaling up */
+      image-rendering: -moz-crisp-edges;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+      image-rendering: pixelated;
     }
 
     /* --- START SCREEN --- */
@@ -195,6 +200,7 @@
 <div id="gameOverOverlay">
   <h1 style="font-size: 44px; margin: 0;">Sky truly is the limit... :)</h1>
   <div class="btn-group">
+    <button id="inspectBtn">Inspect Tree</button>
     <button id="shareBtn">Share Tree</button>
   </div>
 </div>
@@ -242,17 +248,35 @@ const TYPE_COLORS = {
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+
+// --- HIGH DPI CANVAS SCALING ---
+let GAME_WIDTH = window.innerWidth;
+let GAME_HEIGHT = window.innerHeight;
+
+function resizeCanvas() {
+  GAME_WIDTH = window.innerWidth;
+  GAME_HEIGHT = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
+  
+  canvas.width = GAME_WIDTH * dpr;
+  canvas.height = GAME_HEIGHT * dpr;
+  canvas.style.width = GAME_WIDTH + 'px';
+  canvas.style.height = GAME_HEIGHT + 'px';
+  
+  // Reset transforms before applying scale to prevent infinite multiplying
+  ctx.setTransform(1, 0, 0, 1, 0, 0); 
+  ctx.scale(dpr, dpr);
+  ctx.imageSmoothingEnabled = false; 
+}
+resizeCanvas();
 
 // --- RESPONSIVE SCALING ---
-// If the screen is narrow (like a phone), we reduce the size of the canvas elements
-const SCALE = window.innerWidth < 600 ? 0.6 : 1; 
+const SCALE = GAME_WIDTH < 600 ? 0.6 : 1; 
 
 // --- TREE CONSTANTS ---
 const MAX_LEVEL = 4;
 const LEVEL_SPACING = Math.floor(120 * SCALE); 
-const TOP_MARGIN = Math.floor(60 * Math.max(0.7, SCALE)); // Don't shrink top margin too much
+const TOP_MARGIN = Math.floor(60 * Math.max(0.7, SCALE)); 
 
 function computeRootY() { return (MAX_LEVEL * LEVEL_SPACING) + TOP_MARGIN; }
 let TREE_CENTER_Y = computeRootY();
@@ -262,8 +286,8 @@ const playerImg = new Image();
 playerImg.src = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/906.png';
 
 let player = { 
-  x: canvas.width/2, 
-  y: canvas.height - (180 * SCALE), 
+  x: GAME_WIDTH/2, 
+  y: GAME_HEIGHT - (180 * SCALE), 
   width: 160 * SCALE, 
   height: 160 * SCALE, 
   speed: 7 * Math.max(0.8, SCALE), 
@@ -287,12 +311,12 @@ function initEnvironment() {
   for (let i = 0; i < cloudCount; i++) {
     const scale = (Math.random() * 0.5 + 0.5) * SCALE;
     environment.clouds.push({
-      x: Math.random() * canvas.width, y: Math.random() * (canvas.height * 0.3), 
+      x: Math.random() * GAME_WIDTH, y: Math.random() * (GAME_HEIGHT * 0.3), 
       speed: Math.random() * 0.3 + 0.1, scale, width: 150 * scale, height: 80 * scale
     });
   }
   const bladeWidth = 15 * SCALE; const overlap = 5 * SCALE; 
-  const numBlades = Math.ceil(canvas.width / (bladeWidth - overlap)) + 5;
+  const numBlades = Math.ceil(GAME_WIDTH / (bladeWidth - overlap)) + 5;
   for (let i = 0; i < numBlades; i++) {
     environment.grass.push({ x: i * (bladeWidth - overlap), width: bladeWidth, height: (25 + Math.random() * 35) * SCALE });
   }
@@ -306,7 +330,6 @@ class Node {
     this.name = pokeData.name; this.stats = pokeData.stats;
     this.left = null; this.right = null; this.parent = null; this.color = 'red';
     this.x = 0; this.y = 0; this.tx = 0; this.ty = 0;
-    // Scale down the nodes
     this.radius = Math.floor((18 + Math.min(40, pokeData.pokeSize * 2)) * Math.max(0.7, SCALE));
   }
 }
@@ -319,7 +342,7 @@ let sprigData = {
 };
 
 let root = new Node(906, playerImg, sprigData);
-root.color = 'black'; root.x = canvas.width/2; root.y = TREE_CENTER_Y;
+root.color = 'black'; root.x = GAME_WIDTH/2; root.y = TREE_CENTER_Y;
 
 function insert(value, img, pokeData) {
   let node = new Node(value, img, pokeData);
@@ -370,7 +393,7 @@ function getCurrentDepth(node) {
 }
 
 // --- TREE LAYOUT & ANIMATION ---
-function layoutTree(node, depth=0, xMin=0, xMax=canvas.width) {
+function layoutTree(node, depth=0, xMin=0, xMax=GAME_WIDTH) {
   if (!node) return;
   if (depth > MAX_LEVEL) gameOver = true;
   node.tx = (xMin + xMax)/2; node.ty = TREE_CENTER_Y - depth * LEVEL_SPACING;
@@ -396,23 +419,23 @@ function drawEnvironment() {
 function drawTreeAesthetics() {
   const currentDepth = getCurrentDepth(root);
   const depthFactor = Math.min(1, currentDepth / MAX_LEVEL);
-  const maxWidth = canvas.width * (0.5 + (depthFactor * 0.8)); 
+  const maxWidth = GAME_WIDTH * (0.5 + (depthFactor * 0.8)); 
   const treeHeight = 1.5 * ((currentDepth * LEVEL_SPACING) + (100 * SCALE));
   const crownCenterY = root.y - (treeHeight / 2) + 20;
 
   const trunkWidth = 50 * SCALE; 
-  const trunkHeight = canvas.height - root.y; 
+  const trunkHeight = GAME_HEIGHT - root.y; 
   
-  const trunkGrad = ctx.createLinearGradient(canvas.width/2 - trunkWidth/2, 0, canvas.width/2 + trunkWidth/2, 0);
+  const trunkGrad = ctx.createLinearGradient(GAME_WIDTH/2 - trunkWidth/2, 0, GAME_WIDTH/2 + trunkWidth/2, 0);
   trunkGrad.addColorStop(0, '#3e2723'); trunkGrad.addColorStop(1, '#5d4037');
   
   ctx.fillStyle = trunkGrad; ctx.beginPath();
-  ctx.moveTo(canvas.width/2 - trunkWidth/2, root.y); ctx.lineTo(canvas.width/2 + trunkWidth/2, root.y);
-  ctx.lineTo(canvas.width/2 + trunkWidth/4, root.y + trunkHeight); ctx.lineTo(canvas.width/2 - trunkWidth/4, root.y + trunkHeight); ctx.fill();
+  ctx.moveTo(GAME_WIDTH/2 - trunkWidth/2, root.y); ctx.lineTo(GAME_WIDTH/2 + trunkWidth/2, root.y);
+  ctx.lineTo(GAME_WIDTH/2 + trunkWidth/4, root.y + trunkHeight); ctx.lineTo(GAME_WIDTH/2 - trunkWidth/4, root.y + trunkHeight); ctx.fill();
 
-  const grad = ctx.createRadialGradient(canvas.width/2, crownCenterY, 0, canvas.width/2, crownCenterY, treeHeight);
-  grad.addColorStop(0.8, 'rgba(20, 60, 20, 0.4)'); grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.beginPath(); ctx.ellipse(canvas.width / 2, crownCenterY, maxWidth / 2, treeHeight / 1.4, 0, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
+  const grad = ctx.createRadialGradient(GAME_WIDTH/2, crownCenterY, 0, GAME_WIDTH/2, crownCenterY, treeHeight);
+  grad.addColorStop(0.8, 'rgba(20, 60, 20, 1)'); grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.beginPath(); ctx.ellipse(GAME_WIDTH / 2, crownCenterY, maxWidth / 2, treeHeight / 1.4, 0, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
 }
 function drawNodeCrown(x, y, radius) {
   ctx.fillStyle = 'rgba(46, 125, 50, 0.8)';
@@ -450,10 +473,13 @@ function drawTree(node) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
     const displayName = node.name.charAt(0).toUpperCase() + node.name.slice(1);
     const nameY = node.y + node.radius + 6;
-    ctx.font = `bold ${Math.max(10, 13 * SCALE)}px Arial`; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.fillStyle = 'white';             
+    ctx.font = `bold ${Math.max(10, 13 * SCALE)}px Arial`; 
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.fillStyle = 'white';             
     ctx.strokeText(displayName, node.x, nameY); ctx.fillText(displayName, node.x, nameY);
+    
     const statsText = `HP:${node.stats.hp} A:${node.stats.atk} D:${node.stats.def}`; const statsY = nameY + (14 * SCALE);
-    ctx.font = `${Math.max(9, 11 * SCALE)}px Arial`; ctx.strokeText(statsText, node.x, statsY); ctx.fillStyle = '#ffeb3b'; ctx.fillText(statsText, node.x, statsY);
+    ctx.font = `${Math.max(9, 11 * SCALE)}px Arial`; 
+    ctx.strokeText(statsText, node.x, statsY); ctx.fillStyle = '#ffeb3b'; ctx.fillText(statsText, node.x, statsY);
   }
 }
 
@@ -467,7 +493,6 @@ async function spawnObject() {
     const img = new Image(); img.src = data.sprites.front_default;
     const rarity = data.base_experience || 50; 
     
-    // Scale down falling objects
     const baseSize = 40 + (rarity/300)*80;
     const size = Math.floor(baseSize * SCALE);
 
@@ -480,7 +505,7 @@ async function spawnObject() {
       pokeSize: data.height, height: data.height / 10, weight: data.weight / 10,
       types: data.types.map(t => t.type.name), abilities: data.abilities.map(a => a.ability.name), description: description
     };
-    objects.push({ x: Math.random()*(canvas.width-size), y: -size, size, speed: 2+Math.random()*3, img, id, pokeData });
+    objects.push({ x: Math.random()*(GAME_WIDTH-size), y: -size, size, speed: 2+Math.random()*3, img, id, pokeData });
   } catch (e) { console.error(e); }
 }
 
@@ -491,7 +516,7 @@ document.addEventListener('keyup', e => keys[e.key]=false);
 
 function update() {
   if (tiltX) {
-    player.x += tiltX * (0.5 * Math.max(0.7, SCALE)); // Adjust tilt sensitivity slightly
+    player.x += tiltX * (0.5 * Math.max(0.7, SCALE)); 
     if (tiltX > 5) player.facingRight = true;
     if (tiltX < -5) player.facingRight = false;
   }
@@ -504,16 +529,15 @@ function update() {
     player.facingRight = true; 
   }
   
-  player.x = Math.max(0, Math.min(canvas.width-player.width, player.x));
+  player.x = Math.max(0, Math.min(GAME_WIDTH-player.width, player.x));
 
   environment.clouds.forEach(c => {
-    c.x += c.speed; if (c.x > canvas.width + c.width) { c.x = -c.width; c.y = Math.random() * (canvas.height * 0.3); }
+    c.x += c.speed; if (c.x > GAME_WIDTH + c.width) { c.x = -c.width; c.y = Math.random() * (GAME_HEIGHT * 0.3); }
   });
 
   objects.forEach((obj, i) => {
     obj.y += obj.speed;
     const dx = (obj.x+obj.size/2) - (player.x+player.width/2); const dy = (obj.y+obj.size/2) - (player.y+player.height/2);
-    // Add a bit of leniency to collision on mobile so it's not too frustrating
     const r = (player.width/2 * 0.8) + (obj.size/2 * 0.8);
 
     if (dx*dx + dy*dy < r*r) {
@@ -522,13 +546,13 @@ function update() {
       caughtSequence.push(obj.id);
       insert(obj.id, obj.img, obj.pokeData);
     }
-    if (obj.y > canvas.height) objects.splice(i,1);
+    if (obj.y > GAME_HEIGHT) objects.splice(i,1);
   });
-  layoutTree(root, 0, 0, canvas.width); animateTree(root);
+  layoutTree(root, 0, 0, GAME_WIDTH); animateTree(root);
 }
 
 function draw() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
   drawEnvironment(); drawTreeAesthetics(); drawTree(root);
   
   if (playerImg.complete) {
@@ -545,16 +569,21 @@ function draw() {
 
   objects.forEach(o => { if (o.img.complete) ctx.drawImage(o.img, o.x, o.y, o.size, o.size); });
 
-  ctx.fillStyle = '#2e7d32'; const groundHeight = 30 * SCALE; const groundY = canvas.height - groundHeight;
-  ctx.fillRect(0, groundY, canvas.width, groundHeight);
+  ctx.fillStyle = '#2e7d32'; const groundHeight = 30 * SCALE; const groundY = GAME_HEIGHT - groundHeight;
+  ctx.fillRect(0, groundY, GAME_WIDTH, groundHeight);
   environment.grass.forEach(g => {
     ctx.beginPath(); ctx.moveTo(g.x, groundY); ctx.lineTo(g.x + g.width, groundY);
     ctx.lineTo(g.x + g.width / 2, groundY - g.height); ctx.closePath(); ctx.fill();
   });
 
-  ctx.fillStyle='white'; ctx.textAlign='left'; ctx.textBaseline='top'; 
-  ctx.font=`${Math.max(16, 24 * SCALE)}px Arial`;
-  ctx.shadowColor = 'black'; ctx.shadowBlur = 4; ctx.fillText('Score: '+score, 20, 20); ctx.shadowBlur = 0; 
+  ctx.textAlign='left'; ctx.textBaseline='top'; 
+  ctx.font=`bold ${Math.max(16, 24 * SCALE)}px Arial`;
+  
+  // High-performance text shadow
+  ctx.fillStyle='black'; 
+  ctx.fillText('Score: '+score, 22, 22);
+  ctx.fillStyle='white'; 
+  ctx.fillText('Score: '+score, 20, 20); 
 
   if (gameOver && !gameOverHandled) {
     gameOverHandled = true; document.getElementById('gameOverOverlay').style.display = 'flex';
@@ -569,11 +598,12 @@ function loop(){
 } 
 
 window.addEventListener('resize', ()=>{
-  // Update screen sizes but don't reset the scale multiplier dynamically during gameplay 
-  // to avoid weird shifting if the mobile browser bar hides/shows
-  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
-  TREE_CENTER_Y = computeRootY(); root.x = canvas.width/2; root.y = TREE_CENTER_Y;
-  player.y = canvas.height - (180 * SCALE); initEnvironment();
+  resizeCanvas(); // Use the newly scaled resize function
+  TREE_CENTER_Y = computeRootY(); 
+  root.x = GAME_WIDTH/2; 
+  root.y = TREE_CENTER_Y;
+  player.y = GAME_HEIGHT - (180 * SCALE); 
+  initEnvironment();
 });
 
 // --- PERMISSION & START LOGIC ---
@@ -626,7 +656,6 @@ function showPokemonCard(node) {
   document.getElementById('cardModal').style.display = 'flex';
 }
 
-// Touch support for info clicking
 function handleInteraction(e) {
   if (!showTreeInfo) return; 
   const rect = canvas.getBoundingClientRect();
