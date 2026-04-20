@@ -366,7 +366,7 @@ function drawTree(node) {
   
   drawNodeCrown(node.x, node.y, node.radius);
   ctx.beginPath(); ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-  ctx.fillStyle = node.color === 'red'  '#e53935' : '#1a1a1a'; ctx.fill();
+  ctx.fillStyle = node.color === 'red' ? '#e53935' : '#1a1a1a'; ctx.fill();
   ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke();
 
   if (node.img && node.img.complete) {
