@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shared Pokémon Forest</title>
+  <style>
+    body { 
+      margin: 0; 
+      overflow: hidden; 
+      background: #4fc3f7; 
+      font-family: Arial, sans-serif;
+    }
+    canvas { 
+      display: block; 
+      margin: auto; 
+    }
+
+    /* --- UI STYLES --- */
+    #progressUI {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.95);
+      color: #333;
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-weight: bold;
+      font-size: 16px;
+      box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+      z-index: 40;
+      display: none;
+      border: 3px solid #ffcb05;
+      text-align: center;
+    }
+
+    #errorOverlay {
+      position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.85); color: white; display: none;
+      flex-direction: column; justify-content: center; align-items: center; 
+      text-shadow: 2px 2px 4px #000; z-index: 50;
+    }
+
+    /* --- POKEMON CARD MODAL --- */
+    #cardModal {
+      display: none; position: absolute; top: 0; left: 0;
+      width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.85);
+      z-index: 50; justify-content: center; align-items: center;
+      backdrop-filter: blur(5px);
+    }
+
+    .poke-card {
+      background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+      width: 340px; max-height: 90vh; overflow-y: auto;
+      border-radius: 15px; padding: 25px;
+      box-shadow: 0 15px 40px rgba(0,0,0,0.6);
+      border: 10px solid #ffcb05; position: relative;
+      color: #333; box-sizing: border-box;
+    }
+    .poke-card::-webkit-scrollbar { display: none; }
+    .poke-card { -ms-overflow-style: none; scrollbar-width: none; }
+
+    .poke-card h2 {
+      text-transform: capitalize; margin: 0 0 10px 0;
+      font-size: 28px; text-align: center;
+    }
+
+    .type-container { display: flex; justify-content: center; gap: 8px; margin-bottom: 15px; }
+    .type-badge {
+      padding: 4px 12px; border-radius: 12px; font-size: 12px;
+      color: white; text-transform: uppercase; font-weight: bold;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5); box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .poke-card .img-container {
+      background: radial-gradient(circle, #fff 0%, #d4e1f9 100%);
+      border-radius: 10px; border: 3px solid #aaa; margin-bottom: 15px;
+      display: flex; justify-content: center; box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+    }
+    .poke-card img { width: 160px; height: 160px; }
+
+    .description {
+      font-size: 13.5px; line-height: 1.4; font-style: italic; text-align: center;
+      background: rgba(0,0,0,0.04); padding: 12px; border-radius: 8px;
+      margin-bottom: 15px; border-left: 4px solid #3b4cca;
+    }
+
+    .physicals {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      background: #fff; padding: 10px; border-radius: 8px; border: 1px solid #ddd;
+      font-size: 13px; text-align: center; margin-bottom: 15px;
+    }
+    .physicals div span { display: block; font-weight: bold; font-size: 15px; color: #3b4cca;}
+    .abilities-row { grid-column: span 2; border-top: 1px dashed #ccc; padding-top: 8px; margin-top: 5px;}
+
+    .poke-card .stats {
+      background: #fff; padding: 15px; border-radius: 8px;
+      border: 1px solid #ddd; font-size: 16px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .poke-card .stats p {
+      margin: 8px 0; display: flex; justify-content: space-between;
+      border-bottom: 1px solid #eee; padding-bottom: 4px;
+    }
+    .poke-card .stats p:last-child { border-bottom: none; padding-bottom: 0; }
+
+    #closeCardBtn {
+      position: absolute; top: -15px; right: -15px; background: #e53935; color: white; 
+      border: 3px solid white; border-radius: 50%; width: 40px; height: 40px;
+      font-size: 18px; padding: 0; box-shadow: 0 4px 8px rgba(0,0,0,0.3); z-index: 2; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+<div id="progressUI">
+  <span id="progressText">Analyzing Tree Data...</span>
+</div>
+
+<div id="errorOverlay">
+  <h1 style="font-size: 32px; margin: 0; color: #e53935;">Invalid Forest Link</h1>
+  <p>No valid Pokémon data found in the URL parameters.</p>
+</div>
+
+<div id="cardModal">
+  <div class="poke-card">
+    <button id="closeCardBtn">X</button>
+    <h2 id="cardName">Name</h2>
+    <div id="cardTypes" class="type-container"></div>
+    <div class="img-container"><img id="cardImg" src=""></div>
+    <div id="cardDesc" class="description"></div>
+    <div class="physicals">
+      <div>Height <span id="cardHeight"></span></div>
+      <div>Weight <span id="cardWeight"></span></div>
+      <div class="abilities-row">Abilities <span id="cardAbilities" style="font-size: 13px; font-weight:normal; color:#333; text-transform: capitalize;"></span></div>
+    </div>
+    <div class="stats">
+      <p><strong>❤ HP:</strong> <span id="cardHP"></span></p>
+      <p><strong>⚔ Attack:</strong> <span id="cardAtk"></span></p>
+      <p><strong>🛡 Defense:</strong> <span id="cardDef"></span></p>
+    </div>
+  </div>
+</div>
+
+<canvas id="viewerCanvas"></canvas>
+
+<script>
+const TYPE_COLORS = {
+  normal: '#A8A77A', fire: '#EE8130', water: '#6390F0', electric: '#F7D02C', grass: '#7AC74C', 
+  ice: '#96D9D6', fighting: '#C22E28', poison: '#A33EA1', ground: '#E2BF65', flying: '#A890F0', 
+  psychic: '#F95587', bug: '#A6B91A', rock: '#B6A136', ghost: '#735797', dragon: '#6F35FC', 
+  dark: '#705898', steel: '#B7B7CE', fairy: '#D685AD'
+};
+
+const canvas = document.getElementById('viewerCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// --- TREE CONSTANTS ---
+const LEVEL_SPACING = 120; 
+const TOP_MARGIN = 60;
+
+function computeRootY(currentDepth) { 
+  return (currentDepth * LEVEL_SPACING) + TOP_MARGIN; 
+}
+let TREE_CENTER_Y = 180;
+
+// --- ENVIRONMENT STATE ---
+let environment = { clouds: [], grass: [] };
+function initEnvironment() {
+  environment.clouds = [];
+  environment.grass = [];
+  const cloudCount = Math.floor(Math.random() * 3) + 3;
+  for (let i = 0; i < cloudCount; i++) {
+    const scale = Math.random() * 0.5 + 0.5;
+    environment.clouds.push({
+      x: Math.random() * canvas.width, y: Math.random() * (canvas.height * 0.3), 
+      speed: Math.random() * 0.3 + 0.1, scale, width: 150 * scale, height: 80 * scale
+    });
+  }
+  const bladeWidth = 15; const overlap = 5; 
+  const numBlades = Math.ceil(canvas.width / (bladeWidth - overlap)) + 5;
+  for (let i = 0; i < numBlades; i++) {
+    environment.grass.push({ x: i * (bladeWidth - overlap), width: bladeWidth, height: 25 + Math.random() * 35 });
+  }
+}
+initEnvironment(); 
+
+// --- RED-BLACK TREE LOGIC ---
+class Node {
+  constructor(value, img, pokeData) {
+    this.value = value; this.img = img; this.pokeData = pokeData; 
+    this.name = pokeData.name; this.stats = pokeData.stats;
+    this.left = null; this.right = null; this.parent = null; this.color = 'red';
+    
+    // Nodes spawn from the bottom center for the growing animation
+    this.x = canvas.width / 2; this.y = canvas.height; 
+    this.tx = 0; this.ty = 0;
+    this.radius = 18 + Math.min(40, pokeData.pokeSize * 2);
+  }
+}
+
+let root = null; // Tree starts empty
+
+function insert(value, img, pokeData) {
+  let node = new Node(value, img, pokeData);
+  let y = null; let x = root;
+  while (x) { y = x; if (node.value < x.value) x = x.left; else x = x.right; }
+  node.parent = y;
+  if (!y) root = node; else if (node.value < y.value) y.left = node; else y.right = node;
+  fixInsert(node);
+}
+
+function rotateLeft(x) {
+  let y = x.right; x.right = y.left; if (y.left) y.left.parent = x;
+  y.parent = x.parent; if (!x.parent) root = y; else if (x === x.parent.left) x.parent.left = y; else x.parent.right = y;
+  y.left = x; x.parent = y;
+}
+function rotateRight(x) {
+  let y = x.left; x.left = y.right; if (y.right) y.right.parent = x;
+  y.parent = x.parent; if (!x.parent) root = y; else if (x === x.parent.right) x.parent.right = y; else x.parent.left = y;
+  y.right = x; x.parent = y;
+}
+
+function fixInsert(z) {
+  while (z.parent && z.parent.color === 'red') {
+    let gp = z.parent.parent; if (!gp) break;
+    if (z.parent === gp.left) {
+      let y = gp.right;
+      if (y && y.color === 'red') { z.parent.color = 'black'; y.color = 'black'; gp.color = 'red'; z = gp; } 
+      else {
+        if (z === z.parent.right) { z = z.parent; rotateLeft(z); }
+        z.parent.color = 'black'; gp.color = 'red'; rotateRight(gp);
+      }
+    } else {
+      let y = gp.left;
+      if (y && y.color === 'red') { z.parent.color = 'black'; y.color = 'black'; gp.color = 'red'; z = gp; } 
+      else {
+        if (z === z.parent.left) { z = z.parent; rotateRight(z); }
+        z.parent.color = 'black'; gp.color = 'red'; rotateLeft(gp);
+      }
+    }
+  }
+  root.color = 'black';
+}
+
+function getCurrentDepth(node) {
+  if (!node) return 0;
+  return 1 + Math.max(getCurrentDepth(node.left), getCurrentDepth(node.right));
+}
+
+// --- TREE LAYOUT & ANIMATION ---
+function layoutTree(node, depth=0, xMin=0, xMax=canvas.width) {
+  if (!node) return;
+  node.tx = (xMin + xMax)/2; node.ty = TREE_CENTER_Y - depth * LEVEL_SPACING;
+  layoutTree(node.left, depth+1, xMin, node.tx); layoutTree(node.right, depth+1, node.tx, xMax);
+}
+function animateTree(node) {
+  if (!node) return;
+  node.x += (node.tx - node.x) * 0.1; node.y += (node.ty - node.y) * 0.1;
+  animateTree(node.left); animateTree(node.right);
+}
+
+// --- DRAWING AESTHETICS ---
+function drawEnvironment() {
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; 
+  environment.clouds.forEach(c => {
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, c.width * 0.4, c.height * 0.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(c.x + c.width * 0.3, c.y + c.height * 0.2, c.width * 0.35, c.height * 0.4, 0, 0, Math.PI * 2);
+    ctx.ellipse(c.x - c.width * 0.3, c.y + c.height * 0.2, c.width * 0.3, c.height * 0.3, 0, 0, Math.PI * 2);
+    ctx.ellipse(c.x + c.width * 0.1, c.y - c.height * 0.2, c.width * 0.3, c.height * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+  });
+}
+function drawTreeAesthetics() {
+  if (!root) return;
+  const currentDepth = getCurrentDepth(root);
+  const depthFactor = Math.min(1, currentDepth / 4);
+  const maxWidth = canvas.width * (0.5 + (depthFactor * 0.8)); 
+  const treeHeight = 1.5 * ((currentDepth * LEVEL_SPACING) + 100);
+  const crownCenterY = root.y - (treeHeight / 2) + 20;
+
+  const trunkWidth = 50 + (currentDepth * 5); const trunkHeight = canvas.height; 
+  const trunkGrad = ctx.createLinearGradient(canvas.width/2 - 25, 0, canvas.width/2 + 25, 0);
+  trunkGrad.addColorStop(0, '#3e2723'); trunkGrad.addColorStop(1, '#5d4037');
+  
+  ctx.fillStyle = trunkGrad; ctx.beginPath();
+  ctx.moveTo(canvas.width/2 - trunkWidth/2, root.y); ctx.lineTo(canvas.width/2 + trunkWidth/2, root.y);
+  ctx.lineTo(canvas.width/2 + trunkWidth/4, root.y + trunkHeight); ctx.lineTo(canvas.width/2 - trunkWidth/4, root.y + trunkHeight); ctx.fill();
+
+  const grad = ctx.createRadialGradient(canvas.width/2, crownCenterY, 0, canvas.width/2, crownCenterY, treeHeight);
+  grad.addColorStop(0.8, 'rgba(20, 60, 20, 0.4)'); grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.beginPath(); ctx.ellipse(canvas.width / 2, crownCenterY, maxWidth / 2, treeHeight / 1.4, 0, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
+}
+function drawNodeCrown(x, y, radius) {
+  ctx.fillStyle = 'rgba(46, 125, 50, 0.8)';
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * Math.PI * 2; const ox = Math.cos(angle) * 15; const oy = Math.sin(angle) * 10;
+    ctx.beginPath(); ctx.ellipse(x + ox, y + oy, radius * 1.2, radius * 0.9, angle, 0, Math.PI * 2); ctx.fill();
+  }
+}
+function drawTree(node) {
+  if (!node) return;
+  
+  if (node.parent) {
+    ctx.strokeStyle = '#3e2723'; 
+    const branchLength = Math.hypot(node.x - node.parent.x, node.y - node.parent.y);
+    ctx.lineWidth = Math.max(2, branchLength * 0.035); 
+    
+    ctx.beginPath(); ctx.moveTo(node.x, node.y); ctx.lineTo(node.parent.x, node.parent.y); ctx.stroke();
+  }
+  
+  drawTree(node.left); drawTree(node.right);
+  
+  drawNodeCrown(node.x, node.y, node.radius);
+  ctx.beginPath(); ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+  ctx.fillStyle = node.color === 'red' ? '#e53935' : '#1a1a1a'; ctx.fill();
+  ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.stroke();
+
+  if (node.img && node.img.complete) {
+    const imgSize = node.radius * 1.6; ctx.drawImage(node.img, node.x - imgSize/2, node.y - imgSize/2, imgSize, imgSize);
+  }
+  
+  if (node.name) {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
+    const displayName = node.name.charAt(0).toUpperCase() + node.name.slice(1);
+    const nameY = node.y + node.radius + 6;
+    ctx.font = 'bold 13px Arial'; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.fillStyle = 'white';             
+    ctx.strokeText(displayName, node.x, nameY); ctx.fillText(displayName, node.x, nameY);
+    const statsText = `HP:${node.stats.hp} A:${node.stats.atk} D:${node.stats.def}`; const statsY = nameY + 16;
+    ctx.font = '11px Arial'; ctx.strokeText(statsText, node.x, statsY); ctx.fillStyle = '#ffeb3b'; ctx.fillText(statsText, node.x, statsY);
+  }
+}
+
+// --- DATA FETCHING (SEQUENTIAL & SAFE) ---
+async function fetchPokemonData(id) {
+  try {
+    const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`); 
+    if(!res.ok) return null; // Skip if invalid to prevent crashing
+    const data = await res.json();
+    
+    let description = "Description unavailable.";
+    try {
+        const speciesRes = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`); 
+        if (speciesRes.ok) {
+            const speciesData = await speciesRes.json();
+            const flavorEntry = speciesData.flavor_text_entries.find(e => e.language.name === 'en');
+            if (flavorEntry) description = flavorEntry.flavor_text.replace(/[\n\f\r]/g, ' '); 
+        }
+    } catch(e) {
+        // Ignore species fetch error
+    }
+
+    const img = new Image(); 
+    await new Promise(resolve => { 
+        img.onload = resolve; 
+        img.onerror = resolve; // Resolve even on image fail to keep tree building
+        img.src = data.sprites.front_default || 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png'; 
+    });
+
+    return {
+      id: data.id, 
+      img: img, 
+      pokeData: {
+        name: data.name, 
+        stats: { hp: data.stats[0]?.base_stat || 0, atk: data.stats[1]?.base_stat || 0, def: data.stats[2]?.base_stat || 0 },
+        pokeSize: data.height || 10, height: (data.height || 10) / 10, weight: (data.weight || 10) / 10,
+        types: data.types.map(t => t.type.name), abilities: data.abilities.map(a => a.ability.name), description: description
+      }
+    };
+  } catch (error) {
+    console.error(`Failed fetching ID ${id}`, error);
+    return null;
+  }
+}
+
+async function initializeSharedTree() {
+  const params = new URLSearchParams(window.location.search);
+  const treeStr = params.get('tree');
+  
+  if (!treeStr) {
+    document.getElementById('errorOverlay').style.display = 'flex';
+    return;
+  }
+
+  const sequence = treeStr.split(',').map(Number).filter(n => !isNaN(n) && n > 0);
+  
+  if(sequence.length === 0) {
+    document.getElementById('errorOverlay').style.display = 'flex';
+    return;
+  }
+
+  const progressUI = document.getElementById('progressUI');
+  const progressText = document.getElementById('progressText');
+  progressUI.style.display = 'block';
+
+  // Start the visual loop immediately so user sees the tree growing
+  loop();
+
+  // Fetch and insert SEQUENTIALLY to respect API limits
+  for (let i = 0; i < sequence.length; i++) {
+    progressText.innerText = `Replanting Pokémon ${i+1} of ${sequence.length}...`;
+    const p = await fetchPokemonData(sequence[i]);
+    
+    if (p) {
+        insert(p.id, p.img, p.pokeData);
+        TREE_CENTER_Y = computeRootY(getCurrentDepth(root));
+    }
+  }
+  
+  progressUI.style.display = 'none';
+}
+
+// --- RENDER LOOP ---
+function update() {
+  environment.clouds.forEach(c => {
+    c.x += c.speed; if (c.x > canvas.width + c.width) { c.x = -c.width; c.y = Math.random() * (canvas.height * 0.3); }
+  });
+  layoutTree(root, 0, 0, canvas.width); 
+  animateTree(root);
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawEnvironment(); 
+  drawTreeAesthetics(); 
+  drawTree(root);
+
+  // Draw Ground
+  ctx.fillStyle = '#2e7d32'; const groundHeight = 30; const groundY = canvas.height - groundHeight;
+  ctx.fillRect(0, groundY, canvas.width, groundHeight);
+  environment.grass.forEach(g => {
+    ctx.beginPath(); ctx.moveTo(g.x, groundY); ctx.lineTo(g.x + g.width, groundY);
+    ctx.lineTo(g.x + g.width / 2, groundY - g.height); ctx.closePath(); ctx.fill();
+  });
+  
+  // Title
+  ctx.fillStyle='white'; ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.font='bold 24px Arial';
+  ctx.shadowColor = 'black'; ctx.shadowBlur = 4; ctx.fillText('Shared Pokémon Forest', 20, 40); ctx.shadowBlur = 0; 
+}
+
+function loop(){ update(); draw(); requestAnimationFrame(loop);} 
+
+window.addEventListener('resize', ()=>{
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  if(root) TREE_CENTER_Y = computeRootY(getCurrentDepth(root));
+  initEnvironment();
+});
+
+// --- HIT DETECTION & MODAL ---
+function findClickedNode(node, mx, my) {
+  if (!node) return null;
+  const hitRadius = node.radius * 1.5;
+  if (Math.hypot(node.x - mx, node.y - my) <= hitRadius) return node;
+  let leftRes = findClickedNode(node.left, mx, my); if (leftRes) return leftRes;
+  return findClickedNode(node.right, mx, my);
+}
+
+function showPokemonCard(node) {
+  const p = node.pokeData;
+  document.getElementById('cardName').innerText = p.name; document.getElementById('cardImg').src = node.img.src;
+  const typesContainer = document.getElementById('cardTypes'); typesContainer.innerHTML = '';
+  p.types.forEach(t => {
+    const span = document.createElement('span'); span.className = 'type-badge'; span.innerText = t;
+    span.style.backgroundColor = TYPE_COLORS[t] || '#777'; typesContainer.appendChild(span);
+  });
+  document.getElementById('cardDesc').innerText = `"${p.description}"`; document.getElementById('cardHeight').innerText = `${p.height} m`;
+  document.getElementById('cardWeight').innerText = `${p.weight} kg`; document.getElementById('cardAbilities').innerText = p.abilities.join(', ');
+  document.getElementById('cardHP').innerText = p.stats.hp; document.getElementById('cardAtk').innerText = p.stats.atk; document.getElementById('cardDef').innerText = p.stats.def;
+  document.getElementById('cardModal').style.display = 'flex';
+}
+
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const clickedNode = findClickedNode(root, e.clientX - rect.left, e.clientY - rect.top);
+  if (clickedNode) showPokemonCard(clickedNode);
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const hoveredNode = findClickedNode(root, e.clientX - rect.left, e.clientY - rect.top);
+  canvas.style.cursor = hoveredNode ? 'pointer' : 'default';
+});
+
+document.getElementById('closeCardBtn').addEventListener('click', () => document.getElementById('cardModal').style.display = 'none');
+document.getElementById('cardModal').addEventListener('click', (e) => {
+  if(e.target.id === 'cardModal') document.getElementById('cardModal').style.display = 'none';
+});
+
+// Boot up the Viewer!
+initializeSharedTree();
+</script>
+</body>
+</html>
