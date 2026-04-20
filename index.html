@@ -522,7 +522,7 @@ canvas.addEventListener('mousemove', (e) => {
   if (!showTreeInfo) { canvas.style.cursor = 'default'; return; }
   const rect = canvas.getBoundingClientRect();
   const hoveredNode = findClickedNode(root, e.clientX - rect.left, e.clientY - rect.top);
-  canvas.style.cursor = hoveredNode  'pointer' : 'default';
+  canvas.style.cursor = hoveredNode ? 'pointer' : 'default';
 });
 
 // --- BUTTON LISTENERS ---
