@@ -200,7 +200,7 @@
   </style>
 </head>
 <body>
-<audio autoplay loop src="soundtrack.mp3"></audio>
+<audio id="soundtrack" loop src="soundtrack.mp3"></audio>
 
 <div id="startOverlay">
   <div class="start-card">
@@ -641,6 +641,7 @@ startBtn.addEventListener('click', async () => {
 
   startOverlay.style.display = 'none';
   gameStarted = true;
+  document.getElementById('myAudio').play()
   
   setInterval(spawnObject, 1000);
   loop(); 
