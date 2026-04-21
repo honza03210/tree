@@ -559,6 +559,13 @@ function update() {
       score++;
       caughtSequence.push(obj.id);
       insert(obj.id, obj.img, obj.pokeData);
+
+      // Select a random number between 1 and 3
+      const randomSound = Math.floor(Math.random() * 3) + 1;
+      
+      // Create and play the audio object
+      const catchSound = new Audio(`chramst${randomSound}.mp3`);
+      catchSound.play().catch(err => console.log("Audio failed to play:", err));
     }
     if (obj.y > GAME_HEIGHT) objects.splice(i,1);
   });
